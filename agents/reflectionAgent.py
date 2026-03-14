@@ -1,4 +1,4 @@
-from memory import reflectionMemory
+from memories import reflectionMemory
 
 
 INITIAL_PROMPT_TEMPLATE = """
