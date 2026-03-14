@@ -1,7 +1,7 @@
 from llm import LLMClient
 from tools import ToolExecutor
 from tools import search
-from agent import PlanAndSolveAgent, reactAgent, ReflectionAgent
+from agents import PlanAndSolveAgent, reactAgent, ReflectionAgent
 
 
 def main():
