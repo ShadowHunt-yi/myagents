@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv sync:*)",
+      "Bash(uv run:*)",
+      "Bash(powershell -Command \"[math]::Round\\(\\(Get-CimInstance Win32_ComputerSystem\\).TotalPhysicalMemory/1GB, 1\\)\")",
+      "Bash(powershell -Command \"[math]::Round\\(\\(Get-CimInstance Win32_OperatingSystem\\).FreePhysicalMemory/1MB, 1\\)\")",
+      "Bash(powershell -Command \"if \\(Test-Path $env:USERPROFILE\\\\.cache\\\\huggingface\\\\hub\\\\models--Qwen--Qwen1.5-0.5B-Chat\\) { Remove-Item -Recurse -Force $env:USERPROFILE\\\\.cache\\\\huggingface\\\\hub\\\\models--Qwen--Qwen1.5-0.5B-Chat; echo ''Cache cleared'' } else { echo ''No cache found'' }\")",
+      "Bash(uv add:*)",
+      "Bash(OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 uv run python -c \":*)",
+      "Bash(where ollama:*)",
+      "Bash(powershell -Command \"winget list Ollama.Ollama 2>$null | Select-String ''Ollama''\")",
+      "Bash(powershell -Command \"winget list Ollama.Ollama 2>&1 | Select-String ''Ollama''\")"
+    ]
+  }
+}
