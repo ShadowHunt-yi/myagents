@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from serpapi import SerpApiClient
+from serpapi import Client as SerpApiClient
 
 load_dotenv()
 

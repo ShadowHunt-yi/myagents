@@ -23,7 +23,23 @@ class LLMClient:
         base_url = base_url or os.getenv("LLM_BASE_URL", "http://127.0.0.1:8000/v1")
         timeout = timeout or int(os.getenv("LLM_TIMEOUT", "120"))
 
-        self.client = OpenAI(api_key=api_key, base_url=base_url, timeout=timeout)
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=timeout,
+            default_headers={
+                "User-Agent": "",
+                "x-stainless-lang": "",
+                "x-stainless-package-version": "",
+                "x-stainless-os": "",
+                "x-stainless-arch": "",
+                "x-stainless-runtime": "",
+                "x-stainless-runtime-version": "",
+                "x-stainless-async": "",
+                "x-stainless-retry-count": "",
+                "x-stainless-read-timeout": "",
+            },
+        )
 
     def chat(
         self,
@@ -58,9 +74,11 @@ class LLMClient:
 
 if __name__ == "__main__":
     llm = LLMClient()
-    result = llm.chat([
-        {"role": "system", "content": "你是一个有用的助手。"},
-        {"role": "user", "content": "你好，请做一下自我介绍。"},
-    ])
+    result = llm.chat(
+        [
+            {"role": "system", "content": "你是一个有用的助手。"},
+            {"role": "user", "content": "你好，请做一下自我介绍。"},
+        ]
+    )
     if result:
         print(f"\n完整响应: {result}")

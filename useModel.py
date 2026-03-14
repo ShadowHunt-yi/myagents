@@ -16,7 +16,7 @@ import sys
 import time
 import httpx
 
-MODEL_NAME = "qwen2.5:0.5b"
+MODEL_NAME = "qwen2.5:7b"
 OLLAMA_URL = "http://localhost:11434"
 
 

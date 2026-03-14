@@ -1,3 +1,4 @@
+import ast
 
 PLANNER_PROMPT_TEMPLATE = """
 你是一个顶级的AI规划专家。你的任务是将用户提出的复杂问题分解成一个由多个简单步骤组成的行动计划。
@@ -50,8 +51,8 @@ class Planner:
         
         print("--- 正在生成计划 ---")
         # 使用流式输出来获取完整的计划
-        response_text = self.LLMClient.think(messages=messages) or ""
-        
+        response_text = self.LLMClient.chat(messages=messages) or ""
+
         print(f"✅ 计划已生成:\n{response_text}")
         
         # 解析LLM输出的列表字符串
@@ -94,7 +95,7 @@ class Executor:
             
             messages = [{"role": "user", "content": prompt}]
             
-            response_text = self.LLMClient.think(messages=messages) or ""
+            response_text = self.LLMClient.chat(messages=messages) or ""
             
             # 更新历史记录，为下一步做准备
             history += f"步骤 {i+1}: {step}\n结果: {response_text}\n\n"

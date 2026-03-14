@@ -93,5 +93,5 @@ class ReflectionAgent:
     def _get_llm_response(self, prompt: str) -> str:
         """一个辅助方法，用于调用LLM并获取完整的流式响应。"""
         messages = [{"role": "user", "content": prompt}]
-        response_text = self.llm_client.think(messages=messages) or ""
+        response_text = self.llm_client.chat(messages=messages) or ""
         return response_text
