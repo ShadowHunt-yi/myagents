@@ -1,7 +1,7 @@
 from llm import LLMClient
 from tools import ToolExecutor
 from tools import search
-from agent import planSolveAgent, reactAgent,PlanAndSolveAgent
+from agent import planSolveAgent, reactAgent, reflectionAgent
 
 
 def main():
@@ -20,6 +20,7 @@ def main():
     # 3. 创建Agent并注入LLM和工具链
     # agent = reactAgent(llm, executor)
     agent = planSolveAgent(llm)
+    # agent = reflectionAgent(llm)
     # 4. 交互循环
     print("Agent 已就绪 (输入 quit 退出)")
     print(f"已加载工具: {executor.get_tool_names()}")
