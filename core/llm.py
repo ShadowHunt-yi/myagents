@@ -1,9 +1,18 @@
 import os
+from dataclasses import dataclass
 from openai import OpenAI
 from dotenv import load_dotenv
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 load_dotenv()
+
+
+@dataclass
+class LLMResponse:
+    """LLM 响应的统一包装"""
+
+    content: Optional[str] = None
+    tool_calls: Optional[List[Any]] = None
 
 
 class LLMClient:
@@ -102,33 +111,53 @@ class LLMClient:
         
     def chat(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict],
+        tools: Optional[List[Dict]] = None,
         temperature: float = 0,
         max_tokens: int = 512,
-    ) -> Optional[str]:
+    ) -> LLMResponse:
         """
-        发送消息到LLM并返回完整响应文本。
+        发送消息到LLM并返回响应。
+
+        有 tools 时关闭流式，返回可能包含 tool_calls 的结构化响应；
+        无 tools 时保持流式输出，返回纯文本响应。
         """
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                stream=True,
-            )
-
-            collected = []
-            for chunk in response:
-                content = chunk.choices[0].delta.content or ""
-                print(content, end="", flush=True)
-                collected.append(content)
-            print()
-            return "".join(collected)
+            if tools:
+                # Function Calling: 非流式，拿完整响应
+                kwargs: Dict[str, Any] = dict(
+                    model=self.model,
+                    messages=messages,
+                    tools=tools,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                response = self.client.chat.completions.create(**kwargs)
+                msg = response.choices[0].message
+                return LLMResponse(
+                    content=msg.content,
+                    tool_calls=list(msg.tool_calls) if msg.tool_calls else None,
+                )
+            else:
+                # 纯文本: 流式输出
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    stream=True,
+                )
+                collected = []
+                for chunk in response:
+                    content = chunk.choices[0].delta.content or ""
+                    print(content, end="", flush=True)
+                    collected.append(content)
+                print()
+                return LLMResponse(content="".join(collected))
 
         except Exception as e:
             print(f"LLM调用失败: {e}")
-            return None
+            return LLMResponse()
 
 
 if __name__ == "__main__":
@@ -139,5 +168,5 @@ if __name__ == "__main__":
             {"role": "user", "content": "你好，请做一下自我介绍。"},
         ]
     )
-    if result:
-        print(f"\n完整响应: {result}")
+    if result.content:
+        print(f"\n完整响应: {result.content}")

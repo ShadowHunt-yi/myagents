@@ -1,11 +1,12 @@
 """Agent基类"""
 
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import Optional
 from .message import Message
 from .memory import MemoryManager
-from .llm import HelloAgentsLLM
+from .llm import LLMClient, LLMResponse
 from .config import Config
+from ..tools import ToolRegistry
 
 
 class Agent(ABC):
@@ -14,14 +15,16 @@ class Agent(ABC):
     def __init__(
         self,
         name: str,
-        llm: HelloAgentsLLM,
+        llm: LLMClient,
         system_prompt: Optional[str] = None,
         config: Optional[Config] = None,
+        tools: Optional[ToolRegistry] = None,
     ):
         self.name = name
         self.llm = llm
         self.system_prompt = system_prompt
         self.config = config or Config()
+        self.tools = tools or ToolRegistry()
 
         # 对话历史（上下文）
         self._history: list[Message] = []
@@ -29,13 +32,23 @@ class Agent(ABC):
         # 记忆管理器
         self.memory = MemoryManager()
 
+    @abstractmethod
     def run(self, input_text: str, **kwargs) -> str:
         """运行Agent"""
-        self.add_message(Message(role="user", content=input_text))
-        context = self.build_context()
-        response = self.llm.think(context)
-        self.add_message(Message(role="assistant", content=response))
-        return response
+        ...
+
+    def chat(
+        self,
+        messages: list[dict],
+        use_tools: bool = False,
+    ) -> LLMResponse:
+        """调 LLM，可选是否带工具"""
+        tools = self.tools.get_all_schemas() if use_tools and self.tools else None
+        return self.llm.chat(messages, tools=tools)
+
+    def execute_tool(self, name: str, parameters: dict) -> str:
+        """执行工具的便捷方法"""
+        return self.tools.execute(name, parameters)
 
     def add_message(self, message: Message):
         """添加消息到历史记录"""
