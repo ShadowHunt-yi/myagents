@@ -2,11 +2,10 @@
 
 from abc import ABC, abstractmethod
 from typing import Optional
-from .message import Message
-from .memory import MemoryManager
-from .llm import LLMClient, LLMResponse
-from .config import Config
-from ..tools import ToolRegistry
+from core.message import Message
+from core.memory import MemoryManager
+from core.llm import LLMClient, LLMResponse
+from tools import ToolRegistry
 
 
 class Agent(ABC):
@@ -17,14 +16,16 @@ class Agent(ABC):
         name: str,
         llm: LLMClient,
         system_prompt: Optional[str] = None,
-        config: Optional[Config] = None,
         tools: Optional[ToolRegistry] = None,
+        max_iterations: int = 5,
+        enable_tool_calls: bool = True,
     ):
         self.name = name
         self.llm = llm
         self.system_prompt = system_prompt
-        self.config = config or Config()
         self.tools = tools or ToolRegistry()
+        self.max_iterations = max_iterations
+        self.enable_tool_calls = enable_tool_calls
 
         # 对话历史（上下文）
         self._history: list[Message] = []

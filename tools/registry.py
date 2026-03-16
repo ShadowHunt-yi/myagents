@@ -51,9 +51,10 @@ class ToolRegistry:
     def __init__(self):
         self._tools: Dict[str, Tool] = {}
 
-    def register(self, tool: Tool):
+    def register(self, *tools: Tool):
         """注册一个 Tool 实例"""
-        self._tools[tool.name] = tool
+        for tool in tools:
+            self._tools[tool.name] = tool
 
     def register_function(
         self,

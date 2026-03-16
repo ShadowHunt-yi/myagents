@@ -1,4 +1,4 @@
-from memories import reflectionMemory
+from core.memory import MemoryManager
 
 
 INITIAL_PROMPT_TEMPLATE = """
@@ -48,7 +48,8 @@ REFINE_PROMPT_TEMPLATE = """
 class ReflectionAgent:
     def __init__(self, llm_client, max_iterations=3):
         self.llm_client = llm_client
-        self.memory = reflectionMemory()
+        self.memory = MemoryManager()
+        self._executions: list[str] = []
         self.max_iterations = max_iterations
 
     def run(self, task: str):
@@ -58,7 +59,8 @@ class ReflectionAgent:
         print("\n--- 正在进行初始尝试 ---")
         initial_prompt = INITIAL_PROMPT_TEMPLATE.format(task=task)
         initial_code = self._get_llm_response(initial_prompt)
-        self.memory.add_record("execution", initial_code)
+        self._executions.append(initial_code)
+        self.memory.add_short(f"[execution] {initial_code}")
 
         # --- 2. 迭代循环:反思与优化 ---
         for i in range(self.max_iterations):
@@ -66,10 +68,10 @@ class ReflectionAgent:
 
             # a. 反思
             print("\n-> 正在进行反思...")
-            last_code = self.memory.get_last_execution()
+            last_code = self._executions[-1]
             reflect_prompt = REFLECT_PROMPT_TEMPLATE.format(task=task, code=last_code)
             feedback = self._get_llm_response(reflect_prompt)
-            self.memory.add_record("reflection", feedback)
+            self.memory.add_short(f"[reflection] {feedback}")
 
             # b. 检查是否需要停止
             if "无需改进" in feedback:
@@ -84,9 +86,10 @@ class ReflectionAgent:
                 feedback=feedback
             )
             refined_code = self._get_llm_response(refine_prompt)
-            self.memory.add_record("execution", refined_code)
-        
-        final_code = self.memory.get_last_execution()
+            self._executions.append(refined_code)
+            self.memory.add_short(f"[execution] {refined_code}")
+
+        final_code = self._executions[-1]
         print(f"\n--- 任务完成 ---\n最终生成的代码:\n```python\n{final_code}\n```")
         return final_code
 

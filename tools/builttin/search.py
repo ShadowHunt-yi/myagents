@@ -47,16 +47,13 @@ class SearchTool(Tool):
         try:
             from serpapi import Client as SerpApiClient
 
-            params = {
+            client = SerpApiClient(api_key=api_key)
+            results = client.search({
                 "engine": "google",
                 "q": query,
-                "api_key": api_key,
                 "gl": "cn",
                 "hl": "zh-cn",
-            }
-
-            client = SerpApiClient(params)
-            results = client.get_dict()
+            })
             return self._parse_results(query, results)
 
         except ImportError:
