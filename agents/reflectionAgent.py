@@ -1,4 +1,5 @@
 from core.memory import MemoryManager
+from core.db import get_session
 
 
 INITIAL_PROMPT_TEMPLATE = """
@@ -48,7 +49,7 @@ REFINE_PROMPT_TEMPLATE = """
 class ReflectionAgent:
     def __init__(self, llm_client, max_iterations=3):
         self.llm_client = llm_client
-        self.memory = MemoryManager()
+        self.memory = MemoryManager(get_session())
         self._executions: list[str] = []
         self.max_iterations = max_iterations
 

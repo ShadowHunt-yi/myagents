@@ -1,4 +1,5 @@
 from core.llm import LLMClient
+from core.db import init_db
 from tools import ToolRegistry
 from tools.builttin.search import SearchTool
 from tools.builttin.calculator_tool import CalculatorTool
@@ -6,6 +7,9 @@ from agents import PlanAndSolveAgent, ReactAgent, ReflectionAgent
 
 
 def main():
+    # 0. 初始化数据库（自动建表）
+    init_db()
+
     # 1. 创建LLM客户端 (连接到 useModel.py 启动的本地服务)
     llm = LLMClient()
 

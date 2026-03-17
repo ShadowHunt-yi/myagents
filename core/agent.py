@@ -5,6 +5,7 @@ from typing import Optional
 from core.message import Message
 from core.memory import MemoryManager
 from core.llm import LLMClient, LLMResponse
+from core.db import get_session
 from tools import ToolRegistry
 
 
@@ -30,8 +31,8 @@ class Agent(ABC):
         # 对话历史（上下文）
         self._history: list[Message] = []
 
-        # 记忆管理器
-        self.memory = MemoryManager()
+        # 记忆管理器（使用数据库 session）
+        self.memory = MemoryManager(get_session())
 
     @abstractmethod
     def run(self, input_text: str, **kwargs) -> str:
@@ -102,7 +103,7 @@ class Agent(ABC):
 
     def update_memory_cycle(self):
         """更新记忆等级"""
-        self.memory.memory_cycle(self)
+        self.memory.memory_cycle()
 
     def __str__(self) -> str:
         return f"Agent(name={self.name}, provider={self.llm.provider})"
