@@ -7,7 +7,7 @@ from typing import List
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.document_loaders import TextLoader
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -34,7 +34,10 @@ class RAGApplication:
 
     def load_documents(self, file_path: str) -> List:
         """加载文档"""
-        loader = TextLoader(file_path, encoding="utf-8")
+        if file_path.endswith(".pdf"):
+            loader = PyPDFLoader(file_path)
+        else:
+            loader = TextLoader(file_path, encoding="utf-8")
         documents = loader.load()
         print(f"Loaded {len(documents)} documents")
         return documents
@@ -161,7 +164,15 @@ def main():
     embeddings_url = os.getenv("SILICONFLOW_BASE_URL")
     # 创建RAG应用
     rag = RAGApplication(llm, embeddings_key, embeddings_url, db_url)
-
+    
+    pdf_path = os.path.join(os.path.dirname(__file__), "papers", "attention_is_all_you_need.pdf")
+    if os.path.exists(pdf_path):
+        print("Loading and indexing PDF...")
+        docs = rag.load_documents(pdf_path)
+        chunks = rag.split_documents(docs)
+        rag.create_vectorstore(chunks)
+    else:
+        print("No PDF found, using existing vectorstore data.")
     # 加载文档（如果有 sample.txt）
     sample_path = os.path.join(os.path.dirname(__file__), "sample.txt")
     if os.path.exists(sample_path):
