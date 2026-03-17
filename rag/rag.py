@@ -105,37 +105,48 @@ class RAGApplication:
       
     def chat_loop(self):
         """交互式问答循环"""
-        print("\n" + "="*50)
+        import traceback
+
+        print("\n" + "=" * 50)
         print("RAG Application Ready! Type 'exit' to quit.")
-        print("="*50 + "\n")
-      
+        print("=" * 50 + "\n")
+
         while True:
             question = input("Question: ").strip()
-          
+
             if question.lower() in ["exit", "quit", "q"]:
                 print("Goodbye!")
                 break
-              
+
             if not question:
                 continue
-              
+
             try:
+                print("[DEBUG] invoking chain...")
                 response = self.query(question)
-              
-                print(f"\nAnswer: {response['answer']}")
-                print(f"\nSources ({len(response['context'])} documents retrieved):")
-                for i, doc in enumerate(response['context'], 1):
-                    print(f"  {i}. {doc.page_content[:100]}...")
+                print("[DEBUG] chain invoke success")
+
+                answer = response.get("answer", "No answer returned")
+                context = response.get("context", [])
+
+                print(f"\nAnswer: {answer}")
+                print(f"\nSources ({len(context)} documents retrieved):")
+                for i, doc in enumerate(context, 1):
+                    content = getattr(doc, "page_content", "")
+                    print(f"  {i}. {content[:100]}...")
                 print()
-              
+
             except Exception as e:
-                print(f"Error: {e}")
+                print(f"\n[ERROR TYPE] {type(e).__name__}")
+                print(f"[ERROR MSG] {e}\n")
+                traceback.print_exc()
+                print()
 def main():
     """主函数"""
     # 设置API密钥
-    api_key = os.getenv("LLM_API_KEY")
-    model = os.getenv("LLM_MODEL", "gpt-5.2-codex")
-    base_url = os.getenv("LLM_BASE_URL", "http://localhost:11434")  
+    api_key = os.getenv("LONGCAT_API_KEY")
+    model = os.getenv("LONGCAT_MODEL", "gpt-5.2-codex")
+    base_url = os.getenv("LONGCAT_BASE_URL", "http://localhost:11434")  
                          
     if not api_key:
         api_key = input("Enter your OpenAI API key: ")
@@ -167,5 +178,23 @@ def main():
   
     # 启动交互式问答
     rag.chat_loop()
+
+
+# def main():
+#     api_key = os.getenv("LONGCAT_API_KEY")
+#     model = os.getenv("LONGCAT_MODEL", "gpt-5.2-codex")
+#     base_url = os.getenv("LONGCAT_BASE_URL", "http://localhost:11434")  
+                         
+#     print("LLM_BASE_URL =", base_url)
+#     print("LLM_MODEL =", model)
+
+#     llm = ChatOpenAI(
+#         model=model,
+#         api_key=api_key,
+#         base_url=base_url,
+#         temperature=0,
+#     )
+
+#     print(llm.invoke("你好，请回复一句测试成功"))
 if __name__ == "__main__":
     main()
