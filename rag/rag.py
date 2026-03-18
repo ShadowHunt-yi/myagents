@@ -1,7 +1,9 @@
+import hashlib
+import json
 import os
 import sys
 from pathlib import Path
-from typing import List
+from typing import Any, Callable, List
 
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
@@ -20,8 +22,32 @@ from langchain_classic.chains.combine_documents import create_stuff_documents_ch
 from langchain_classic.chains.retrieval import create_retrieval_chain
 from langchain_postgres import PGVector
 from dotenv import load_dotenv
+from sqlalchemy.exc import InterfaceError as SAInterfaceError
+from sqlalchemy.exc import OperationalError as SAOperationalError
 
 load_dotenv()
+
+# 已索引文件的记录，防止重复写入
+INDEX_RECORD_PATH = Path(__file__).parent / ".indexed_files.json"
+
+
+def _file_hash(file_path: str) -> str:
+    """计算文件的 MD5 哈希，用于判断文件是否变更"""
+    h = hashlib.md5()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _load_index_record() -> dict:
+    if INDEX_RECORD_PATH.exists():
+        return json.loads(INDEX_RECORD_PATH.read_text(encoding="utf-8"))
+    return {}
+
+
+def _save_index_record(record: dict):
+    INDEX_RECORD_PATH.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 class RAGApplication:
@@ -37,6 +63,9 @@ class RAGApplication:
         self.chain = None  # 稍后初始化
         self.llm = llm_client
         self.retriever = None  # 稍后初始化
+        self._retriever_k = 6
+        self._collection_name = "documents"
+        self._db_url = db_url
         # Limit batch size to avoid API 413 when a chunk list exceeds provider max
         self.embeddings = OpenAIEmbeddings(
             api_key=embeddings_key,
@@ -44,11 +73,65 @@ class RAGApplication:
             base_url=embeddings_url,
             chunk_size=64,
         )
-        self.vector_store = PGVector(
+        self.vector_store = self._build_vector_store()
+
+    def _build_vector_store(self) -> PGVector:
+        # Keep pooled DB connections healthy in long-running CLI sessions.
+        engine_args = {
+            "pool_pre_ping": True,
+            "pool_recycle": 1800,
+            "connect_args": {
+                "keepalives": 1,
+                "keepalives_idle": 30,
+                "keepalives_interval": 10,
+                "keepalives_count": 5,
+            },
+        }
+        return PGVector(
             embeddings=self.embeddings,
-            connection=db_url,
-            collection_name="documents",
+            connection=self._db_url,
+            collection_name=self._collection_name,
+            engine_args=engine_args,
         )
+
+    @staticmethod
+    def _is_db_connection_error(exc: Exception) -> bool:
+        if isinstance(exc, (SAOperationalError, SAInterfaceError)):
+            return True
+
+        text = str(exc).lower()
+        markers = (
+            "software caused connection abort",
+            "could not receive data from server",
+            "server closed the connection unexpectedly",
+            "connection reset by peer",
+            "ssl connection has been closed unexpectedly",
+        )
+        return any(marker in text for marker in markers)
+
+    def _reconnect_vector_store(self, rebuild_chain: bool = False):
+        self.vector_store = self._build_vector_store()
+        if self.retriever is not None:
+            self.setup_retriever(k=self._retriever_k)
+        if rebuild_chain and self.chain is not None and self.retriever is not None:
+            self.create_chain()
+
+    def _run_with_db_retry(
+        self,
+        fn: Callable[[], Any],
+        op_name: str,
+        rebuild_chain: bool = False,
+    ) -> Any:
+        try:
+            return fn()
+        except Exception as exc:
+            if not self._is_db_connection_error(exc):
+                raise
+            print(
+                f"[WARN] {op_name} failed due to DB disconnect, reconnecting and retrying once..."
+            )
+            self._reconnect_vector_store(rebuild_chain=rebuild_chain)
+            return fn()
 
     def load_documents(self, file_path: str) -> List:
         """加载文档"""
@@ -90,20 +173,38 @@ class RAGApplication:
                 continue
             doc.page_content = text
             cleaned.append(doc)
-        self.vector_store.add_documents(cleaned)
+        self._run_with_db_retry(
+            lambda: self.vector_store.add_documents(cleaned),
+            op_name="vectorstore add_documents",
+        )
         print(
             f"Vectorstore: {len(cleaned)} chunks added (removed {removed} empty/invalid)"
         )
 
-    def setup_retriever(self, k: int = 8):
-        """设置检索器"""
+    def clear_collection(self):
+        """清空向量数据库中的所有文档（用于清理重复数据后重新索引）"""
+        self.vector_store.delete_collection()
+        # 重新创建空 collection
+        self.vector_store = self._build_vector_store()
+        # 同时清除索引记录
+        if INDEX_RECORD_PATH.exists():
+            INDEX_RECORD_PATH.unlink()
+        print("向量数据库已清空，索引记录已重置。下次启动会重新索引所有文件。")
+
+    def setup_retriever(self, k: int = 6):
+        """设置检索器，使用 MMR 避免返回重复内容"""
+        self._retriever_k = k
         self.retriever = self.vector_store.as_retriever(
-            search_type="similarity", search_kwargs={"k": k}
+            search_type="mmr",
+            search_kwargs={"k": k, "fetch_k": 20, "lambda_mult": 0.5},
         )
-        print(f"Retriever setup with k={k}")
+        print(f"Retriever setup with MMR, k={k}")
 
     def debug_retrieval(self, question: str, k: int = 8):
-        docs = self.vector_store.similarity_search(question, k=k)
+        docs = self._run_with_db_retry(
+            lambda: self.vector_store.similarity_search(question, k=k),
+            op_name="debug retrieval",
+        )
         print(f"\n[DEBUG] Retrieved {len(docs)} docs\n")
 
         for i, doc in enumerate(docs, 1):
@@ -115,21 +216,20 @@ class RAGApplication:
 
     def create_chain(self):
         """创建检索链"""
-        # 创建提示模板
         prompt = ChatPromptTemplate.from_messages(
             [
                 (
                     "system",
-                    """You are a helpful assistant specialized in answering questions based on provided context.
-          
-            Guidelines:
-            - Answer based only on the provided context
-            - If the answer is not in the context, say "I don't have enough information to answer this question"
-            - Be concise but complete
-            - Cite specific parts of the context when possible
-          
-            Context:
-            {context}""",
+                    """你是一个专业的知识库问答助手。请根据下面提供的参考资料回答用户问题。
+
+规则：
+- 只根据参考资料中的内容回答，不要编造信息
+- 如果参考资料中没有相关内容，请明确说"参考资料中没有找到相关信息"
+- 回答要简洁完整，尽量引用原文关键内容
+- 使用中文回答
+
+参考资料：
+{context}""",
                 ),
                 ("human", "{input}"),
             ]
@@ -151,7 +251,11 @@ class RAGApplication:
         if not self.chain:
             raise ValueError("Chain not initialized. Call create_chain() first.")
 
-        response = self.chain.invoke({"input": question})
+        response = self._run_with_db_retry(
+            lambda: self.chain.invoke({"input": question}),
+            op_name="chain invoke",
+            rebuild_chain=True,
+        )
         return response
 
     def chat_loop(self):
@@ -199,7 +303,6 @@ class RAGApplication:
 
 def main():
     """主函数"""
-    # 设置API密钥
     api_key = os.getenv("LONGCAT_API_KEY")
     model = os.getenv("LONGCAT_MODEL", "gpt-5.2-codex")
     base_url = os.getenv("LONGCAT_BASE_URL", "http://localhost:11434")
@@ -210,35 +313,39 @@ def main():
     db_url = os.getenv("DATABASE_URL")
     embeddings_key = os.getenv("SILICONFLOW_API_KEY")
     embeddings_url = os.getenv("SILICONFLOW_BASE_URL")
-    # 创建RAG应用
+
     rag = RAGApplication(llm, embeddings_key, embeddings_url, db_url)
 
-    indexed_any = False
+    # ---- 去重索引：只索引新增或内容变化的文件 ----
+    index_record = _load_index_record()
+    files_to_index: list[str] = []
 
     papers_dir = Path(__file__).parent / "papers"
     pdf_files = sorted(papers_dir.glob("*.pdf")) if papers_dir.exists() else []
-    if pdf_files:
-        for pdf in pdf_files:
-            print(f"Loading and indexing PDF: {pdf.name} ...")
-            docs = rag.load_documents(str(pdf))
+    sample_path = Path(__file__).parent / "sample.txt"
+
+    candidates = [str(p) for p in pdf_files]
+    if sample_path.exists():
+        candidates.append(str(sample_path))
+
+    for fpath in candidates:
+        current_hash = _file_hash(fpath)
+        if index_record.get(fpath) == current_hash:
+            print(f"[跳过] 已索引且未变化: {os.path.basename(fpath)}")
+            continue
+        files_to_index.append(fpath)
+        index_record[fpath] = current_hash
+
+    if files_to_index:
+        for fpath in files_to_index:
+            print(f"[索引] {os.path.basename(fpath)} ...")
+            docs = rag.load_documents(fpath)
             chunks = rag.split_documents(docs)
             rag.create_vectorstore(chunks)
-            indexed_any = True
+        _save_index_record(index_record)
+        print(f"共索引 {len(files_to_index)} 个文件")
     else:
-        print("No PDFs found in papers/, using existing vectorstore data.")
-
-    sample_path = Path(__file__).parent / "sample.txt"
-    if sample_path.exists():
-        print("Loading and indexing documents from sample.txt ...")
-        docs = rag.load_documents(str(sample_path))
-        chunks = rag.split_documents(docs)
-        rag.create_vectorstore(chunks)
-        indexed_any = True
-    else:
-        print("No sample.txt found, using existing vectorstore data.")
-
-    if not indexed_any:
-        print("Nothing indexed this run. Vectorstore may be empty.")
+        print("所有文件已索引，无需重复写入。")
 
     # 设置检索器和链
     rag.setup_retriever(k=4)
@@ -247,22 +354,5 @@ def main():
     # 启动交互式问答
     rag.chat_loop()
 
-
-# def main():
-#     api_key = os.getenv("LONGCAT_API_KEY")
-#     model = os.getenv("LONGCAT_MODEL", "gpt-5.2-codex")
-#     base_url = os.getenv("LONGCAT_BASE_URL", "http://localhost:11434")
-
-#     print("LLM_BASE_URL =", base_url)
-#     print("LLM_MODEL =", model)
-
-#     llm = ChatOpenAI(
-#         model=model,
-#         api_key=api_key,
-#         base_url=base_url,
-#         temperature=0,
-#     )
-
-#     print(llm.invoke("你好，请回复一句测试成功"))
 if __name__ == "__main__":
     main()
