@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any, Callable, List
@@ -15,11 +16,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough
+from langchain_core.documents import Document
+from langchain_core.prompts import ChatPromptTemplate, PromptTemplate
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
-from langchain_classic.chains.retrieval import create_retrieval_chain
 from langchain_postgres import PGVector
 from dotenv import load_dotenv
 from sqlalchemy.exc import InterfaceError as SAInterfaceError
@@ -29,6 +28,51 @@ load_dotenv()
 
 # 已索引文件的记录，防止重复写入
 INDEX_RECORD_PATH = Path(__file__).parent / ".indexed_files.json"
+
+EN_STOPWORDS = {
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "to",
+    "of",
+    "in",
+    "on",
+    "for",
+    "with",
+    "by",
+    "is",
+    "are",
+    "be",
+    "as",
+    "that",
+    "this",
+    "it",
+    "from",
+    "how",
+    "what",
+    "which",
+}
+CN_STOPWORDS = {
+    "的",
+    "了",
+    "和",
+    "是",
+    "在",
+    "中",
+    "请",
+    "关于",
+    "进行",
+    "分析",
+}
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def _file_hash(file_path: str) -> str:
@@ -60,12 +104,27 @@ class RAGApplication:
         embeddings_url: str,
         db_url: str,
     ):
-        self.chain = None  # 稍后初始化
+        self.chain = None  # 兼容旧调用，实际存放 document_chain
+        self.document_chain = None
         self.llm = llm_client
         self.retriever = None  # 稍后初始化
         self._retriever_k = 6
         self._collection_name = "documents"
         self._db_url = db_url
+        self._retrieval_top_k = int(os.getenv("RETRIEVAL_TOP_K", "8"))
+        self._retrieval_fetch_k = int(os.getenv("RETRIEVAL_FETCH_K", "40"))
+        self._hybrid_sem_weight = float(os.getenv("HYBRID_SEM_WEIGHT", "0.75"))
+        self._hybrid_keyword_weight = float(os.getenv("HYBRID_KEYWORD_WEIGHT", "0.25"))
+        self._retrieval_debug_scores = _env_bool("RETRIEVAL_DEBUG_SCORES", True)
+        self._min_final_score = float(os.getenv("RETRIEVAL_MIN_FINAL_SCORE", "0.0"))
+
+        total_weight = self._hybrid_sem_weight + self._hybrid_keyword_weight
+        if total_weight <= 0:
+            self._hybrid_sem_weight = 0.75
+            self._hybrid_keyword_weight = 0.25
+        else:
+            self._hybrid_sem_weight /= total_weight
+            self._hybrid_keyword_weight /= total_weight
         # Limit batch size to avoid API 413 when a chunk list exceeds provider max
         self.embeddings = OpenAIEmbeddings(
             api_key=embeddings_key,
@@ -133,6 +192,137 @@ class RAGApplication:
             self._reconnect_vector_store(rebuild_chain=rebuild_chain)
             return fn()
 
+    @staticmethod
+    def _tokenize_query_for_keyword(question: str) -> List[str]:
+        raw_tokens = re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]+", question.lower())
+        tokens: List[str] = []
+        seen = set()
+
+        for tok in raw_tokens:
+            if not tok.strip():
+                continue
+            if re.fullmatch(r"[A-Za-z0-9_]+", tok):
+                if tok in EN_STOPWORDS or len(tok) <= 1:
+                    continue
+                if tok not in seen:
+                    seen.add(tok)
+                    tokens.append(tok)
+                continue
+
+            if tok in CN_STOPWORDS or len(tok) <= 1:
+                continue
+            if tok not in seen:
+                seen.add(tok)
+                tokens.append(tok)
+
+            if len(tok) > 2:
+                for i in range(len(tok) - 1):
+                    bg = tok[i : i + 2]
+                    if bg in CN_STOPWORDS:
+                        continue
+                    if bg not in seen:
+                        seen.add(bg)
+                        tokens.append(bg)
+
+        return tokens
+
+    @staticmethod
+    def _keyword_score(content: str, tokens: List[str], question: str) -> float:
+        if not tokens:
+            return 0.0
+
+        text = content.lower()
+        hits = sum(1 for token in tokens if token in text)
+        score = hits / len(tokens)
+
+        tf = sum(text.count(token) for token in tokens)
+        score += min(tf / 20.0, 0.2)
+
+        q = question.strip().lower()
+        if q and len(q) >= 4 and q in text:
+            score += 0.1
+
+        return max(0.0, min(1.0, score))
+
+    def hybrid_retrieve(
+        self,
+        question: str,
+        k: int | None = None,
+        fetch_k: int | None = None,
+        filter: dict | None = None,
+    ) -> List[Document]:
+        top_k = k or self._retrieval_top_k
+        candidate_k = max(top_k, fetch_k or self._retrieval_fetch_k)
+
+        docs_and_scores = self._run_with_db_retry(
+            lambda: self.vector_store.similarity_search_with_score(
+                question, k=candidate_k, filter=filter
+            ),
+            op_name="hybrid retrieval candidates",
+        )
+        if not docs_and_scores:
+            return []
+
+        tokens = self._tokenize_query_for_keyword(question)
+        distances = [float(score) for _, score in docs_and_scores if score is not None]
+        min_distance = min(distances) if distances else 0.0
+        max_distance = max(distances) if distances else 1.0
+        denom = max(max_distance - min_distance, 1e-12)
+
+        ranked_docs: List[Document] = []
+        for doc, distance in docs_and_scores:
+            distance_value = float(distance) if distance is not None else max_distance
+            semantic_score = 1.0 - ((distance_value - min_distance) / denom)
+            semantic_score = max(0.0, min(1.0, semantic_score))
+            keyword_score = self._keyword_score(doc.page_content, tokens, question)
+            final_score = (
+                self._hybrid_sem_weight * semantic_score
+                + self._hybrid_keyword_weight * keyword_score
+            )
+
+            metadata = dict(doc.metadata or {})
+            metadata.setdefault("source_file", "unknown")
+            metadata.setdefault("page", "unknown")
+            metadata["_vector_distance"] = distance_value
+            metadata["_semantic_score"] = semantic_score
+            metadata["_keyword_score"] = keyword_score
+            metadata["_final_score"] = final_score
+
+            ranked_docs.append(
+                Document(
+                    id=doc.id,
+                    page_content=doc.page_content,
+                    metadata=metadata,
+                )
+            )
+
+        ranked_docs.sort(key=lambda d: d.metadata.get("_final_score", 0.0), reverse=True)
+        filtered_docs = [
+            d
+            for d in ranked_docs
+            if d.metadata.get("_final_score", 0.0) >= self._min_final_score
+        ]
+        if len(filtered_docs) >= top_k:
+            return filtered_docs[:top_k]
+        return ranked_docs[:top_k]
+
+    @staticmethod
+    def _group_docs_by_source(docs: List[Document]) -> List[Document]:
+        groups: dict[str, List[Document]] = {}
+        order: List[str] = []
+
+        for doc in docs:
+            source = doc.metadata.get("source_file", "unknown")
+            if source not in groups:
+                groups[source] = []
+                order.append(source)
+            groups[source].append(doc)
+
+        grouped_docs: List[Document] = []
+        for source in order:
+            grouped_docs.extend(groups[source])
+        return grouped_docs
+
     def load_documents(self, file_path: str) -> List:
         """加载文档"""
         if file_path.endswith(".pdf"):
@@ -196,36 +386,54 @@ class RAGApplication:
         self._retriever_k = k
         self.retriever = self.vector_store.as_retriever(
             search_type="mmr",
-            search_kwargs={"k": k, "fetch_k": 20, "lambda_mult": 0.5},
+            search_kwargs={
+                "k": k,
+                "fetch_k": max(20, self._retrieval_fetch_k),
+                "lambda_mult": 0.5,
+            },
         )
         print(f"Retriever setup with MMR, k={k}")
 
-    def debug_retrieval(self, question: str, k: int = 8):
-        docs = self._run_with_db_retry(
-            lambda: self.vector_store.similarity_search(question, k=k),
-            op_name="debug retrieval",
+    def debug_retrieval(self, question: str, k: int | None = None) -> List[Document]:
+        docs = self.hybrid_retrieve(
+            question=question,
+            k=k or self._retrieval_top_k,
+            fetch_k=self._retrieval_fetch_k,
         )
         print(f"\n[DEBUG] Retrieved {len(docs)} docs\n")
 
         for i, doc in enumerate(docs, 1):
             source = doc.metadata.get("source_file", "unknown")
             page = doc.metadata.get("page", "unknown")
-            print(f"--- DOC {i} | file={source} | page={page} ---")
+            if self._retrieval_debug_scores:
+                final_score = doc.metadata.get("_final_score", 0.0)
+                semantic = doc.metadata.get("_semantic_score", 0.0)
+                keyword = doc.metadata.get("_keyword_score", 0.0)
+                distance = doc.metadata.get("_vector_distance", 0.0)
+                print(
+                    f"--- DOC {i} | file={source} | page={page} | "
+                    f"final={final_score:.4f} semantic={semantic:.4f} "
+                    f"keyword={keyword:.4f} distance={distance:.4f} ---"
+                )
+            else:
+                print(f"--- DOC {i} | file={source} | page={page} ---")
             print(doc.page_content[:500])
             print()
+        return docs
 
     def create_chain(self):
-        """创建检索链"""
+        """创建文档问答链（检索在链外完成）"""
         prompt = ChatPromptTemplate.from_messages(
             [
                 (
                     "system",
-                    """你是一个专业的知识库问答助手。请根据下面提供的参考资料回答用户问题。
+                    """你是一个专业的论文分析助手。请根据提供的参考资料回答用户问题。
 
 规则：
-- 只根据参考资料中的内容回答，不要编造信息
-- 如果参考资料中没有相关内容，请明确说"参考资料中没有找到相关信息"
-- 回答要简洁完整，尽量引用原文关键内容
+- 只根据参考资料中的内容回答，不要编造信息。
+- 回答时先按文档分模块总结，格式为“在 <文档名> 中，...”
+- 至少覆盖检索到的主要文档观点，再给出“综合结论”小节。
+- 如果某文档证据不足，请明确写“该文档证据不足”。
 - 使用中文回答
 
 参考资料：
@@ -234,29 +442,33 @@ class RAGApplication:
                 ("human", "{input}"),
             ]
         )
-
-        # 创建文档处理链
-        document_chain = create_stuff_documents_chain(
-            llm=self.llm, prompt=prompt, document_separator="\n\n---\n\n"
+        document_prompt = PromptTemplate.from_template(
+            "[文档: {source_file} | 页码: {page}]\n{page_content}"
         )
 
-        # 创建检索链
-        self.chain = create_retrieval_chain(
-            retriever=self.retriever, combine_docs_chain=document_chain
+        self.document_chain = create_stuff_documents_chain(
+            llm=self.llm,
+            prompt=prompt,
+            document_prompt=document_prompt,
+            document_separator="\n\n---\n\n",
         )
-        print("RAG chain created successfully")
+        self.chain = self.document_chain
+        print("Document QA chain created successfully")
 
-    def query(self, question: str) -> dict:
+    def query(self, question: str, docs: List[Document] | None = None) -> dict:
         """执行查询"""
-        if not self.chain:
+        if not self.document_chain:
             raise ValueError("Chain not initialized. Call create_chain() first.")
 
-        response = self._run_with_db_retry(
-            lambda: self.chain.invoke({"input": question}),
-            op_name="chain invoke",
-            rebuild_chain=True,
+        retrieved_docs = docs or self.hybrid_retrieve(
+            question=question,
+            k=self._retrieval_top_k,
+            fetch_k=self._retrieval_fetch_k,
         )
-        return response
+        grouped_docs = self._group_docs_by_source(retrieved_docs)
+
+        answer = self.document_chain.invoke({"input": question, "context": grouped_docs})
+        return {"answer": answer, "context": retrieved_docs}
 
     def chat_loop(self):
         """交互式问答循环"""
@@ -278,8 +490,8 @@ class RAGApplication:
 
             try:
                 print("[DEBUG] invoking chain...")
-                self.debug_retrieval(question, k=8)
-                response = self.query(question)
+                retrieved_docs = self.debug_retrieval(question, k=self._retrieval_top_k)
+                response = self.query(question, docs=retrieved_docs)
                 print("[DEBUG] chain invoke success")
 
                 answer = response.get("answer", "No answer returned")
@@ -348,7 +560,7 @@ def main():
         print("所有文件已索引，无需重复写入。")
 
     # 设置检索器和链
-    rag.setup_retriever(k=4)
+    rag.setup_retriever(k=rag._retrieval_top_k)
     rag.create_chain()
 
     # 启动交互式问答
