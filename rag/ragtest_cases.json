@@ -1,0 +1,144 @@
+[
+  {
+    "id": "lore_core_thesis",
+    "question": "Lore 这篇论文的核心主张是什么？它把 git commit message 重新定义成了什么？",
+    "expected_sources": [
+      "2603.15566v1.pdf"
+    ],
+    "expected_answer_keywords": [
+      "Lore",
+      "commit message",
+      "structured",
+      "knowledge",
+      "protocol"
+    ]
+  },
+  {
+    "id": "lore_decision_shadow",
+    "question": "在 Lore 论文中，Decision Shadow 指的是什么问题？",
+    "expected_sources": [
+      "2603.15566v1.pdf"
+    ],
+    "expected_answer_keywords": [
+      "Decision Shadow",
+      "reasoning",
+      "alternatives",
+      "constraints",
+      "lost context"
+    ]
+  },
+  {
+    "id": "lore_git_trailers",
+    "question": "Lore 使用了 git 的什么原生机制来结构化决策信息？",
+    "expected_sources": [
+      "2603.15566v1.pdf"
+    ],
+    "expected_answer_keywords": [
+      "git trailers",
+      "native",
+      "key-value"
+    ]
+  },
+  {
+    "id": "lore_trailer_vocab",
+    "question": "Lore 提供的 trailer vocabulary 里，至少举 3 个字段名称。",
+    "expected_sources": [
+      "2603.15566v1.pdf"
+    ],
+    "expected_answer_keywords": [
+      "Constraint",
+      "Rejected",
+      "Directive"
+    ]
+  },
+  {
+    "id": "openseeker_two_innovations",
+    "question": "OpenSeeker 提出的两个核心技术创新分别是什么？",
+    "expected_sources": [
+      "2603.15594v1.pdf"
+    ],
+    "expected_answer_keywords": [
+      "fact-grounded scalable controllable QA synthesis",
+      "denoised trajectory synthesis"
+    ]
+  },
+  {
+    "id": "openseeker_data_scale",
+    "question": "OpenSeeker 训练数据规模是多少？英文和中文样本分别多少？",
+    "expected_sources": [
+      "2603.15594v1.pdf"
+    ],
+    "expected_answer_keywords": [
+      "11.7k",
+      "10.3k",
+      "1.4k"
+    ],
+    "expected_answer_regex": "(11\\.7k|10\\.3k|1\\.4k)"
+  },
+  {
+    "id": "openseeker_browsecomp",
+    "question": "在 BrowseComp 基准上，OpenSeeker 与 DeepDive 的分数分别是多少？",
+    "expected_sources": [
+      "2603.15594v1.pdf"
+    ],
+    "expected_answer_keywords": [
+      "29.5",
+      "15.3",
+      "BrowseComp"
+    ],
+    "expected_answer_regex": "(29\\.5).*(15\\.3)|(15\\.3).*(29\\.5)"
+  },
+  {
+    "id": "openseeker_browsecomp_zh",
+    "question": "OpenSeeker 在 BrowseComp-ZH 上是否超过 Tongyi DeepResearch？分数是多少？",
+    "expected_sources": [
+      "2603.15594v1.pdf"
+    ],
+    "expected_answer_keywords": [
+      "48.4",
+      "46.7",
+      "BrowseComp-ZH",
+      "Tongyi DeepResearch"
+    ],
+    "expected_answer_regex": "(48\\.4).*(46\\.7)|(46\\.7).*(48\\.4)"
+  },
+  {
+    "id": "energetics_three_costs",
+    "question": "Nonequilibrium energetics 这篇论文把稳态熵产生率分解为哪三类代价？",
+    "expected_sources": [
+      "2603.15602v1.pdf"
+    ],
+    "expected_answer_keywords": [
+      "entropy production",
+      "locomotion",
+      "actuation",
+      "sensing"
+    ]
+  },
+  {
+    "id": "energetics_three_tasks",
+    "question": "该 smart active particle 论文用哪三类任务来展示 dissipation-accuracy trade-off？",
+    "expected_sources": [
+      "2603.15602v1.pdf"
+    ],
+    "expected_answer_keywords": [
+      "point target",
+      "target disc",
+      "path-following"
+    ]
+  },
+  {
+    "id": "cross_paper_compare",
+    "question": "哪篇论文提出把 commit 历史变成结构化知识协议，哪篇论文提出 fully open-source 的 frontier search agent？",
+    "expected_sources": [
+      "2603.15566v1.pdf",
+      "2603.15594v1.pdf"
+    ],
+    "expected_answer_keywords": [
+      "Lore",
+      "OpenSeeker",
+      "commit",
+      "search agent"
+    ]
+  }
+]

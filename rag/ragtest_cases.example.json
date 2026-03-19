@@ -1,0 +1,40 @@
+[
+  {
+    "id": "lore_core_thesis",
+    "question": "Lore 这篇论文的核心主张是什么？它把 git commit message 重新定义成了什么？",
+    "expected_sources": [
+      "2603.15566v1.pdf"
+    ],
+    "expected_answer_keywords": [
+      "Lore",
+      "commit message",
+      "structured",
+      "knowledge",
+      "protocol"
+    ]
+  },
+  {
+    "id": "openseeker_two_innovations",
+    "question": "OpenSeeker 提出的两个核心技术创新分别是什么？",
+    "expected_sources": [
+      "2603.15594v1.pdf"
+    ],
+    "expected_answer_keywords": [
+      "fact-grounded scalable controllable QA synthesis",
+      "denoised trajectory synthesis"
+    ]
+  },
+  {
+    "id": "energetics_three_costs",
+    "question": "Nonequilibrium energetics 这篇论文把稳态熵产生率分解为哪三类代价？",
+    "expected_sources": [
+      "2603.15602v1.pdf"
+    ],
+    "expected_answer_keywords": [
+      "entropy production",
+      "locomotion",
+      "actuation",
+      "sensing"
+    ]
+  }
+]
