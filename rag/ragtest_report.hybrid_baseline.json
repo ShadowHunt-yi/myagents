@@ -1,0 +1,309 @@
+{
+  "summary": {
+    "cases_total": 11,
+    "source_labeled_cases": 11,
+    "answer_labeled_cases": 11,
+    "avg_source_recall": 1.0,
+    "source_hit_rate": 1.0,
+    "avg_source_precision_like": 0.4393939393939394,
+    "top1_source_hit_rate": 0.5454545454545454,
+    "source_mrr": 0.7575757575757576,
+    "avg_answer_accuracy": 0.3515151515151515,
+    "top_k": 8,
+    "fetch_k": 40,
+    "skip_answer": false,
+    "index_stats": {
+      "indexed": 0,
+      "skipped": 0,
+      "candidates": 0
+    }
+  },
+  "cases": [
+    {
+      "id": "lore_core_thesis",
+      "question": "Lore 这篇论文的核心主张是什么？它把 git commit message 重新定义成了什么？",
+      "expected_sources": [
+        "2603.15566v1.pdf"
+      ],
+      "matched_sources": [
+        "2603.15566v1.pdf"
+      ],
+      "retrieved_sources": [
+        "2603.15566v1.pdf",
+        "2603.15594v1.pdf"
+      ],
+      "source_recall": 1.0,
+      "source_hit": 1.0,
+      "source_precision_like": 0.5,
+      "source_top1_hit": 1.0,
+      "source_first_match_rank": 1,
+      "source_mrr": 1.0,
+      "answer_accuracy": 0.8,
+      "answer_score_parts": {
+        "keyword_coverage": 0.8
+      },
+      "answer": "根据提供的参考资料，关于Lore论文的核心主张及其对git commit message的重新定义，**证据不足**，无法给出完整准确的回答。\n\n现有资料仅包含以下零星信息：\n\n**在 2603.15566v1.pdf 中：**\n- 提到Lore commit是\"a dozen structured trailers\"（十几个结构化尾部信息），并指出从对话记录（transcript）到结构化知识（structured knowledge）的压缩对于未来在上下文窗口限制下运行的智能体至关重要（页码2）\n- 提到该论文识别了\"Decision Shadow problem\"（决策阴影问题），并设计了Lore协议（页码6）\n- 提到作者使用了Claude等AI工具辅助研究，包括头脑风暴核心论点、迭代协议设计决策等（页码6）\n\n**综合结论：**\n参考资料中关于Lore的具体核心主张、技术细节及其对git commit message的重新定义内容严重不足。现有片段仅暗示Lore可能与将对话记录压缩为结构化知识有关，且涉及\"决策阴影问题\"和\"结构化尾部信息\"的概念，但无法据此推断其完整主张或重新定义的具体内容。需要查阅论文全文才能准确回答该问题。"
+    },
+    {
+      "id": "lore_decision_shadow",
+      "question": "在 Lore 论文中，Decision Shadow 指的是什么问题？",
+      "expected_sources": [
+        "2603.15566v1.pdf"
+      ],
+      "matched_sources": [
+        "2603.15566v1.pdf"
+      ],
+      "retrieved_sources": [
+        "2603.15566v1.pdf",
+        "2603.15594v1.pdf"
+      ],
+      "source_recall": 1.0,
+      "source_hit": 1.0,
+      "source_precision_like": 0.5,
+      "source_top1_hit": 1.0,
+      "source_first_match_rank": 1,
+      "source_mrr": 1.0,
+      "answer_accuracy": 0.4,
+      "answer_score_parts": {
+        "keyword_coverage": 0.4
+      },
+      "answer": "在 **2603.15566v1.pdf（页码0）** 中，Decision Shadow 被明确定义为一种软件开发中的现象：随着时间推移，Decision Shadows 会不断累积，每个单独来看都很微小，但 collectively（ collectively）它们会产生业界所谓的\"legacy code\"（遗留代码）——即代码功能正常但其 structural rationale（结构原理）已经丢失。Peng 和 Wang [1] 将这种现象描述为\"tacit knowledge\"（隐性知识），这种知识\"通常存在于开发者经验或非正式工件中，而非代码本身\"。\n\n在 **2603.15566v1.pdf（页码6）** 中，提到 Decision Shadow 问题的识别是该研究的核心智力贡献之一，作者使用 AI 辅助工具（如 Claude）进行头脑风暴和协议设计，以解决这一问题。\n\n在 **2603.15566v1.pdf（页码2）** 中，间接关联了 Decision Shadow 与 Lore 协议的设计目标，指出该协议通过将大量对话记录压缩为结构化知识（structured trailers），帮助未来在 context window constraints（上下文窗口限制）下运行的智能体更好地理解代码决策背景。\n\n**2603.15594v1.pdf（页码8）** 该文档证据不足，内容与 Lore 论文及 Decision Shadow 问题无关。\n\n### 综合结论\n在 Lore 论文中，**Decision Shadow** 指的是软件开发过程中那些未被充分记录或逐渐丢失的微小决策理由和背景信息。这些决策的\"阴影\"随时间累积，导致代码虽功能正常但其设计原理和结构 rationale 丢失，最终形成难以维护的遗留代码（legacy code）问题。该现象本质上是 tacit knowledge（隐性知识）的流失，这些知识原本存在于开发者经验或非正式交流中，而非代码库内。Lore 协议的设计正是为了解决这一问题，通过结构化记录和压缩决策上下文，确保未来智能体或开发者能够理解代码背后的决策逻辑。"
+    },
+    {
+      "id": "lore_git_trailers",
+      "question": "Lore 使用了 git 的什么原生机制来结构化决策信息？",
+      "expected_sources": [
+        "2603.15566v1.pdf"
+      ],
+      "matched_sources": [
+        "2603.15566v1.pdf"
+      ],
+      "retrieved_sources": [
+        "2603.15566v1.pdf",
+        "2603.15594v1.pdf"
+      ],
+      "source_recall": 1.0,
+      "source_hit": 1.0,
+      "source_precision_like": 0.5,
+      "source_top1_hit": 1.0,
+      "source_first_match_rank": 1,
+      "source_mrr": 1.0,
+      "answer_accuracy": 0.0,
+      "answer_score_parts": {
+        "keyword_coverage": 0.0
+      },
+      "answer": "在 [文档: 2603.15566v1.pdf | 页码: 2] 中，Lore 使用 **trailers** 这一 git 原生机制来结构化决策信息。文档明确指出，Lore 采用\"一种每个项目都已拥有的工件（commit messages）进行丰富，使用 git 已支持的机制（trailers）\"，将结构化知识压缩存储在提交消息中。\n\n在 [文档: 2603.15566v1.pdf | 页码: 3] 中，进一步说明团队可以引入领域特定的 trailers 而不破坏兼容性，且这些 Lore trailers 在任何 git log 输出中都是可读的。CLI 工具则提供了高效的、限定范围的查询功能。\n\n综合结论：Lore 利用 git 的 **trailers** 机制来结构化决策信息。Trailers 是 git commit message 中原生的键值对格式，位于提交消息末尾，可被 git 原生支持读取。Lore 通过在 trailers 中存储结构化数据，实现了在不增加额外基础设施的情况下，将决策信息嵌入到版本控制系统中。"
+    },
+    {
+      "id": "lore_trailer_vocab",
+      "question": "Lore 提供的 trailer vocabulary 里，至少举 3 个字段名称。",
+      "expected_sources": [
+        "2603.15566v1.pdf"
+      ],
+      "matched_sources": [
+        "2603.15566v1.pdf"
+      ],
+      "retrieved_sources": [
+        "2603.15602v1.pdf",
+        "2603.15594v1.pdf",
+        "2603.15566v1.pdf"
+      ],
+      "source_recall": 1.0,
+      "source_hit": 1.0,
+      "source_precision_like": 0.3333333333333333,
+      "source_top1_hit": 0.0,
+      "source_first_match_rank": 3,
+      "source_mrr": 0.3333333333333333,
+      "answer_accuracy": 0.0,
+      "answer_score_parts": {
+        "keyword_coverage": 0.0
+      },
+      "answer": "在 2603.15602v1.pdf 中，该文档证据不足。文档内容主要讨论自驱动活性粒子的热力学模型和Pareto结构，未涉及Lore或trailer vocabulary的相关信息。\n\n在 2603.15594v1.pdf 中，该文档证据不足。文档内容主要讨论OpenSeeker模型和数据集合成，未涉及Lore或trailer vocabulary的相关信息。\n\n在 2603.15566v1.pdf 中，该文档证据不足。文档虽然提到Lore协议使用\"a dozen structured trailers\"（一打结构化尾部字段）来压缩对话记录，但**未明确列出任何具体的字段名称**。\n\n**综合结论**：所有提供的参考资料均未明确列出Lore trailer vocabulary的具体字段名称，无法根据现有材料回答该问题。"
+    },
+    {
+      "id": "openseeker_two_innovations",
+      "question": "OpenSeeker 提出的两个核心技术创新分别是什么？",
+      "expected_sources": [
+        "2603.15594v1.pdf"
+      ],
+      "matched_sources": [
+        "2603.15594v1.pdf"
+      ],
+      "retrieved_sources": [
+        "2603.15602v1.pdf",
+        "2603.15594v1.pdf"
+      ],
+      "source_recall": 1.0,
+      "source_hit": 1.0,
+      "source_precision_like": 0.5,
+      "source_top1_hit": 0.0,
+      "source_first_match_rank": 2,
+      "source_mrr": 0.5,
+      "answer_accuracy": 0.0,
+      "answer_score_parts": {
+        "keyword_coverage": 0.0
+      },
+      "answer": "根据提供的参考资料，**无法确定 OpenSeeker 提出的两个核心技术创新具体是什么**。\n\n各文档内容分析如下：\n\n**在 2603.15602v1.pdf 中**，该文档讨论的是信息获取的价格（price of information acquisition）和快速感知极限下的漂移-扩散描述，内容与 OpenSeeker 无关，**证据不足**。\n\n**在 2603.15594v1.pdf 中**：\n- 页码 2 提到了搜索代理的发展背景和现状，列举了 Deep Research、Kimi-Researcher 等系统，但未涉及 OpenSeeker 的具体技术创新。\n- 页码 4 描述了一个数据合成范式的两个筛选标准（需要外部信息、可解性）和\"三个核心优势\"，但未明确说明这些就是 OpenSeeker 的核心技术创新，且三个优势的具体内容被截断未显示。\n- 页码 7 提到了 OpenSeeker 的评估基线，但同样未提及其技术创新点。\n\n**综合结论**：提供的参考资料中虽然多次提及 OpenSeeker 这个名称，但**没有包含关于其两个核心技术创新的具体描述**，因此无法从现有材料中得出答案。"
+    },
+    {
+      "id": "openseeker_data_scale",
+      "question": "OpenSeeker 训练数据规模是多少？英文和中文样本分别多少？",
+      "expected_sources": [
+        "2603.15594v1.pdf"
+      ],
+      "matched_sources": [
+        "2603.15594v1.pdf"
+      ],
+      "retrieved_sources": [
+        "2603.15566v1.pdf",
+        "2603.15594v1.pdf",
+        "2603.15602v1.pdf"
+      ],
+      "source_recall": 1.0,
+      "source_hit": 1.0,
+      "source_precision_like": 0.3333333333333333,
+      "source_top1_hit": 0.0,
+      "source_first_match_rank": 2,
+      "source_mrr": 0.5,
+      "answer_accuracy": 0.0,
+      "answer_score_parts": {
+        "keyword_coverage": 0.0,
+        "regex_match": 0.0
+      },
+      "answer": "根据提供的参考资料，无法获取 OpenSeeker 训练数据规模的具体信息。\n\n在 [文档: 2603.15594v1.pdf] 中，虽然提到了 OpenSeeker 使用了\"独立合成的高难度 QA 和高质量去噪轨迹\"（independently synthesized high-difficulty QA and high-quality denoised trajectories），并\"完全开源了整个数据集\"（fully open-sourcing the entire dataset），但**该文档证据不足**，未提供训练数据的总体规模、英文样本数量或中文样本数量等具体数字。\n\n其他文档（2603.15566v1.pdf 和 2603.15602v1.pdf）均未提及 OpenSeeker 或其训练数据相关信息。\n\n**综合结论**：提供的参考资料中不包含 OpenSeeker 训练数据规模及中英文样本分布的具体信息。"
+    },
+    {
+      "id": "openseeker_browsecomp",
+      "question": "在 BrowseComp 基准上，OpenSeeker 与 DeepDive 的分数分别是多少？",
+      "expected_sources": [
+        "2603.15594v1.pdf"
+      ],
+      "matched_sources": [
+        "2603.15594v1.pdf"
+      ],
+      "retrieved_sources": [
+        "2603.15594v1.pdf",
+        "2603.15566v1.pdf"
+      ],
+      "source_recall": 1.0,
+      "source_hit": 1.0,
+      "source_precision_like": 0.5,
+      "source_top1_hit": 1.0,
+      "source_first_match_rank": 1,
+      "source_mrr": 1.0,
+      "answer_accuracy": 0.16666666666666666,
+      "answer_score_parts": {
+        "keyword_coverage": 0.3333333333333333,
+        "regex_match": 0.0
+      },
+      "answer": "根据提供的参考资料，**无法找到 OpenSeeker 和 DeepDive 在 BrowseComp 基准上的具体分数**。\n\n具体分析如下：\n\n**在 2603.15594v1.pdf 中：**\n- 该文档确实提到了 OpenSeeker 与 BrowseComp 基准的比较（页码 9）\n- 文档指出通过开源模型进行推理，比较了 OpenSeeker 合成数据与 BrowseComp 基准的难度\n- 文档提到 OpenSeeker 的数据\"matches or even exceeds the difficulty of established benchmarks\"（匹配甚至超过基准难度）\n- 但**没有提供任何具体的分数或数值结果**\n\n**在 2603.15566v1.pdf 中：**\n- 该文档主要讨论 Git Context Controller 和 Lore 协议\n- **与 BrowseComp、OpenSeeker、DeepDive 完全无关**\n\n**综合结论：**\n提供的参考资料中**没有包含** OpenSeeker 和 DeepDive 在 BrowseComp 基准上的具体分数数据。文档仅定性描述了 OpenSeeker 数据难度与 BrowseComp 的比较关系，但未给出可量化的评分结果。"
+    },
+    {
+      "id": "openseeker_browsecomp_zh",
+      "question": "OpenSeeker 在 BrowseComp-ZH 上是否超过 Tongyi DeepResearch？分数是多少？",
+      "expected_sources": [
+        "2603.15594v1.pdf"
+      ],
+      "matched_sources": [
+        "2603.15594v1.pdf"
+      ],
+      "retrieved_sources": [
+        "2603.15594v1.pdf",
+        "2603.15602v1.pdf",
+        "2603.15566v1.pdf"
+      ],
+      "source_recall": 1.0,
+      "source_hit": 1.0,
+      "source_precision_like": 0.3333333333333333,
+      "source_top1_hit": 1.0,
+      "source_first_match_rank": 1,
+      "source_mrr": 1.0,
+      "answer_accuracy": 1.0,
+      "answer_score_parts": {
+        "keyword_coverage": 1.0,
+        "regex_match": 1.0
+      },
+      "answer": "在 **2603.15594v1.pdf** 中，第7页提供了 OpenSeeker 和 Tongyi DeepResearch 在四个基准测试上的性能对比数据。根据表格信息：\n\n- **Tongyi DeepResearch** 在 BrowseComp-ZH 上的分数为 **46.7**\n- **OpenSeeker-v1-30B-SFT** 在 BrowseComp-ZH 上的分数为 **48.4**\n\n因此，OpenSeeker 在 BrowseComp-ZH 上确实超过了 Tongyi DeepResearch，领先分数为 **1.7** 分。\n\n**综合结论**：OpenSeeker-v1-30B-SFT 在 BrowseComp-ZH 基准测试中以 48.4 分的成绩超过了 Tongyi DeepResearch 的 46.7 分。"
+    },
+    {
+      "id": "energetics_three_costs",
+      "question": "Nonequilibrium energetics 这篇论文把稳态熵产生率分解为哪三类代价？",
+      "expected_sources": [
+        "2603.15602v1.pdf"
+      ],
+      "matched_sources": [
+        "2603.15602v1.pdf"
+      ],
+      "retrieved_sources": [
+        "2603.15594v1.pdf",
+        "2603.15602v1.pdf",
+        "2603.15566v1.pdf"
+      ],
+      "source_recall": 1.0,
+      "source_hit": 1.0,
+      "source_precision_like": 0.3333333333333333,
+      "source_top1_hit": 0.0,
+      "source_first_match_rank": 2,
+      "source_mrr": 0.5,
+      "answer_accuracy": 0.5,
+      "answer_score_parts": {
+        "keyword_coverage": 0.5
+      },
+      "answer": "根据提供的参考资料，**该文档证据不足**。\n\n在文档2603.15602v1.pdf中，虽然论文涉及非平衡态热力学（Nonequilibrium energetics）相关内容，讨论了自转向活性粒子的最小模型，并提到了运动性（motility）、感知（sensing）和执行（actuation）在热力学基础上被同等对待，以及精度/速度-耗散权衡（precision/speed–dissipation trade-off）等概念，但**并未明确提及将稳态熵产生率分解为三类代价的具体内容**。\n\n提供的片段中只出现了熵产生率的符号表示（如˙Σ），但没有关于其分解方式的详细说明。因此，无法从现有资料中确定这三类代价的具体分类。"
+    },
+    {
+      "id": "energetics_three_tasks",
+      "question": "该 smart active particle 论文用哪三类任务来展示 dissipation-accuracy trade-off？",
+      "expected_sources": [
+        "2603.15602v1.pdf"
+      ],
+      "matched_sources": [
+        "2603.15602v1.pdf"
+      ],
+      "retrieved_sources": [
+        "2603.15594v1.pdf",
+        "2603.15602v1.pdf",
+        "2603.15566v1.pdf"
+      ],
+      "source_recall": 1.0,
+      "source_hit": 1.0,
+      "source_precision_like": 0.3333333333333333,
+      "source_top1_hit": 0.0,
+      "source_first_match_rank": 2,
+      "source_mrr": 0.5,
+      "answer_accuracy": 0.0,
+      "answer_score_parts": {
+        "keyword_coverage": 0.0
+      },
+      "answer": "根据提供的参考资料，**该文档证据不足**。\n\n虽然文档2603.15602v1.pdf确实涉及自驱动活性粒子（self-steering active particle）和耗散-精度权衡（dissipation-accuracy trade-off）的研究，但所提供的片段中**并未明确提及**用于展示这种权衡的\"三类任务\"的具体内容。\n\n该文档仅提到：\n- 研究了Pareto结构如何被几何参数ε重塑\n- 发现增加ε会系统性地\"软化\"精度/速度-耗散权衡\n- 能量耗散约束和限制了系统行为\n\n但关于具体使用哪三类任务来展示这一权衡，现有资料中缺乏相关信息。"
+    },
+    {
+      "id": "cross_paper_compare",
+      "question": "哪篇论文提出把 commit 历史变成结构化知识协议，哪篇论文提出 fully open-source 的 frontier search agent？",
+      "expected_sources": [
+        "2603.15566v1.pdf",
+        "2603.15594v1.pdf"
+      ],
+      "matched_sources": [
+        "2603.15566v1.pdf",
+        "2603.15594v1.pdf"
+      ],
+      "retrieved_sources": [
+        "2603.15594v1.pdf",
+        "2603.15566v1.pdf",
+        "2603.15602v1.pdf"
+      ],
+      "source_recall": 1.0,
+      "source_hit": 1.0,
+      "source_precision_like": 0.6666666666666666,
+      "source_top1_hit": 1.0,
+      "source_first_match_rank": 1,
+      "source_mrr": 1.0,
+      "answer_accuracy": 1.0,
+      "answer_score_parts": {
+        "keyword_coverage": 1.0
+      },
+      "answer": "根据提供的参考资料：\n\n**关于将 commit 历史变为结构化知识协议的论文：**\n\n在 [文档: 2603.15566v1.pdf] 中，提出了 **Lore 协议**，该协议通过\"enriching an artifact every project already has (commit messages) using a mechanism git already supports (trailers)\"的方式，将 commit 历史转化为结构化知识。文中指出，Lore 使用 trailers 机制来丰富 commit messages，并通过 CLI 工具实现查询，实现了\"compression from transcript to structured knowledge\"，使未来 agent 能够在 context window 限制下消费这些结构化知识。\n\n**关于 fully open-source 的 frontier search agent 的论文：**\n\n在 [文档: 2603.15594v1.pdf] 中，提出了 **OpenSeeker**，这是一个由纯学术研究团队开发的 frontier search agent。论文明确指出该模型\"fully open-sourcing the entire dataset to the community\"，并强调其通过\"independently synthesized high-difficulty QA and high-quality denoised trajectories\"实现了高效性，与依赖 proprietary, company-synthesized datasets 的基线方法形成鲜明对比。\n\n**综合结论：**\n- **2603.15566v1.pdf** 提出了将 commit 历史转化为结构化知识的 Lore 协议\n- **2603.15594v1.pdf** 提出了 fully open-source 的 frontier search agent OpenSeeker"
+    }
+  ]
+}

@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, List
 
+import httpx
+
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 os.environ["OMP_NUM_THREADS"] = "1"
 os.environ["GOTO_NUM_THREADS"] = "1"
@@ -113,18 +115,43 @@ class RAGApplication:
         self._db_url = db_url
         self._retrieval_top_k = int(os.getenv("RETRIEVAL_TOP_K", "8"))
         self._retrieval_fetch_k = int(os.getenv("RETRIEVAL_FETCH_K", "40"))
-        self._hybrid_sem_weight = float(os.getenv("HYBRID_SEM_WEIGHT", "0.75"))
-        self._hybrid_keyword_weight = float(os.getenv("HYBRID_KEYWORD_WEIGHT", "0.25"))
         self._retrieval_debug_scores = _env_bool("RETRIEVAL_DEBUG_SCORES", True)
-        self._min_final_score = float(os.getenv("RETRIEVAL_MIN_FINAL_SCORE", "0.0"))
 
-        total_weight = self._hybrid_sem_weight + self._hybrid_keyword_weight
-        if total_weight <= 0:
-            self._hybrid_sem_weight = 0.75
-            self._hybrid_keyword_weight = 0.25
-        else:
-            self._hybrid_sem_weight /= total_weight
-            self._hybrid_keyword_weight /= total_weight
+        # Deprecated retrieval knobs are kept for compatibility only.
+        self._deprecated_hybrid_sem_weight = float(
+            os.getenv("HYBRID_SEM_WEIGHT", "0.75")
+        )
+        self._deprecated_hybrid_keyword_weight = float(
+            os.getenv("HYBRID_KEYWORD_WEIGHT", "0.25")
+        )
+        self._deprecated_min_final_score = float(
+            os.getenv("RETRIEVAL_MIN_FINAL_SCORE", "0.0")
+        )
+        if (
+            os.getenv("HYBRID_SEM_WEIGHT") is not None
+            or os.getenv("HYBRID_KEYWORD_WEIGHT") is not None
+            or os.getenv("RETRIEVAL_MIN_FINAL_SCORE") is not None
+        ):
+            print(
+                "[WARN] HYBRID_SEM_WEIGHT/HYBRID_KEYWORD_WEIGHT/"
+                "RETRIEVAL_MIN_FINAL_SCORE are deprecated and ignored. "
+                "Retrieval ranking now uses reranker scores."
+            )
+
+        self._reranker_model = os.getenv("RERANKERMODEL", "BAAI/bge-reranker-v2-m3")
+        self._reranker_base_url = (
+            os.getenv("RERANKER_BASE_URL") or embeddings_url or ""
+        ).rstrip("/")
+        self._reranker_api_key = os.getenv("RERANKER_API_KEY") or embeddings_key
+        self._reranker_timeout = float(os.getenv("RERANKER_TIMEOUT", "20"))
+        self._reranker_path = os.getenv("RERANKER_PATH", "/rerank").strip()
+        if not self._reranker_path.startswith("/"):
+            self._reranker_path = f"/{self._reranker_path}"
+        if not self._reranker_base_url:
+            print(
+                "[WARN] RERANKER_BASE_URL is empty. Rerank requests may fail and "
+                "fallback to vector recall order."
+            )
         # Limit batch size to avoid API 413 when a chunk list exceeds provider max
         self.embeddings = OpenAIEmbeddings(
             api_key=embeddings_key,
@@ -192,6 +219,119 @@ class RAGApplication:
             self._reconnect_vector_store(rebuild_chain=rebuild_chain)
             return fn()
 
+    def _reranker_url(self) -> str:
+        return f"{self._reranker_base_url}{self._reranker_path}"
+
+    @staticmethod
+    def _parse_rerank_results(payload: Any) -> List[tuple[int, float]]:
+        rows: list[Any] = []
+        if isinstance(payload, dict):
+            maybe_rows = (
+                payload.get("results") or payload.get("data") or payload.get("items")
+            )
+            if isinstance(maybe_rows, list):
+                rows = maybe_rows
+        elif isinstance(payload, list):
+            rows = payload
+
+        parsed: List[tuple[int, float]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            index = row.get("index")
+            score = row.get("relevance_score", row.get("score"))
+            if index is None or score is None:
+                continue
+            try:
+                parsed.append((int(index), float(score)))
+            except (TypeError, ValueError):
+                continue
+
+        parsed.sort(key=lambda x: x[1], reverse=True)
+        return parsed
+
+    @staticmethod
+    def _clone_doc(doc: Document, metadata: dict) -> Document:
+        return Document(
+            id=doc.id,
+            page_content=doc.page_content,
+            metadata=metadata,
+        )
+
+    def _rerank_documents(
+        self,
+        question: str,
+        candidates: List[Document],
+        top_k: int,
+    ) -> List[Document]:
+        if not candidates:
+            return []
+
+        payload = {
+            "model": self._reranker_model,
+            "query": question,
+            "documents": [doc.page_content for doc in candidates],
+            "top_n": len(candidates),
+            "return_documents": False,
+        }
+        headers = {"Content-Type": "application/json"}
+        if self._reranker_api_key:
+            headers["Authorization"] = f"Bearer {self._reranker_api_key}"
+
+        try:
+            with httpx.Client(timeout=self._reranker_timeout) as client:
+                response = client.post(
+                    self._reranker_url(),
+                    headers=headers,
+                    json=payload,
+                )
+                response.raise_for_status()
+                result = response.json()
+
+            rerank_rows = self._parse_rerank_results(result)
+            if not rerank_rows:
+                raise ValueError("reranker returned no parsable ranking rows")
+
+            reranked_docs: List[Document] = []
+            used_indices: set[int] = set()
+            for rank, (idx, score) in enumerate(rerank_rows, start=1):
+                if idx < 0 or idx >= len(candidates) or idx in used_indices:
+                    continue
+                used_indices.add(idx)
+                base_doc = candidates[idx]
+                metadata = dict(base_doc.metadata or {})
+                metadata["_rerank_score"] = score
+                metadata["_rerank_rank"] = rank
+                metadata["_rerank_fallback"] = False
+                reranked_docs.append(self._clone_doc(base_doc, metadata))
+
+            # Keep a deterministic order even if provider returns partial rows.
+            if len(reranked_docs) < len(candidates):
+                for idx, base_doc in enumerate(candidates):
+                    if idx in used_indices:
+                        continue
+                    metadata = dict(base_doc.metadata or {})
+                    metadata["_rerank_score"] = None
+                    metadata["_rerank_rank"] = len(reranked_docs) + 1
+                    metadata["_rerank_fallback"] = False
+                    reranked_docs.append(self._clone_doc(base_doc, metadata))
+
+            return reranked_docs[:top_k]
+        except Exception as exc:
+            print(
+                f"[WARN] rerank failed ({type(exc).__name__}: {exc}); "
+                "fallback to vector recall order."
+            )
+            fallback_docs: List[Document] = []
+            for rank, base_doc in enumerate(candidates[:top_k], start=1):
+                metadata = dict(base_doc.metadata or {})
+                metadata["_rerank_score"] = None
+                metadata["_rerank_rank"] = rank
+                metadata["_rerank_fallback"] = True
+                fallback_docs.append(self._clone_doc(base_doc, metadata))
+            return fallback_docs
+
+    # Deprecated: kept for compatibility docs only; no longer used in retrieval.
     @staticmethod
     def _tokenize_query_for_keyword(question: str) -> List[str]:
         raw_tokens = re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]+", question.lower())
@@ -226,6 +366,7 @@ class RAGApplication:
 
         return tokens
 
+    # Deprecated: kept for compatibility docs only; no longer used in retrieval.
     @staticmethod
     def _keyword_score(content: str, tokens: List[str], question: str) -> float:
         if not tokens:
@@ -258,53 +399,22 @@ class RAGApplication:
             lambda: self.vector_store.similarity_search_with_score(
                 question, k=candidate_k, filter=filter
             ),
-            op_name="hybrid retrieval candidates",
+            op_name="vector recall candidates",
         )
         if not docs_and_scores:
             return []
 
-        tokens = self._tokenize_query_for_keyword(question)
-        distances = [float(score) for _, score in docs_and_scores if score is not None]
-        min_distance = min(distances) if distances else 0.0
-        max_distance = max(distances) if distances else 1.0
-        denom = max(max_distance - min_distance, 1e-12)
-
-        ranked_docs: List[Document] = []
+        candidates: List[Document] = []
         for doc, distance in docs_and_scores:
-            distance_value = float(distance) if distance is not None else max_distance
-            semantic_score = 1.0 - ((distance_value - min_distance) / denom)
-            semantic_score = max(0.0, min(1.0, semantic_score))
-            keyword_score = self._keyword_score(doc.page_content, tokens, question)
-            final_score = (
-                self._hybrid_sem_weight * semantic_score
-                + self._hybrid_keyword_weight * keyword_score
-            )
-
             metadata = dict(doc.metadata or {})
             metadata.setdefault("source_file", "unknown")
             metadata.setdefault("page", "unknown")
-            metadata["_vector_distance"] = distance_value
-            metadata["_semantic_score"] = semantic_score
-            metadata["_keyword_score"] = keyword_score
-            metadata["_final_score"] = final_score
-
-            ranked_docs.append(
-                Document(
-                    id=doc.id,
-                    page_content=doc.page_content,
-                    metadata=metadata,
-                )
+            metadata["_vector_distance"] = (
+                float(distance) if distance is not None else None
             )
+            candidates.append(self._clone_doc(doc, metadata))
 
-        ranked_docs.sort(key=lambda d: d.metadata.get("_final_score", 0.0), reverse=True)
-        filtered_docs = [
-            d
-            for d in ranked_docs
-            if d.metadata.get("_final_score", 0.0) >= self._min_final_score
-        ]
-        if len(filtered_docs) >= top_k:
-            return filtered_docs[:top_k]
-        return ranked_docs[:top_k]
+        return self._rerank_documents(question=question, candidates=candidates, top_k=top_k)
 
     @staticmethod
     def _group_docs_by_source(docs: List[Document]) -> List[Document]:
@@ -406,14 +516,24 @@ class RAGApplication:
             source = doc.metadata.get("source_file", "unknown")
             page = doc.metadata.get("page", "unknown")
             if self._retrieval_debug_scores:
-                final_score = doc.metadata.get("_final_score", 0.0)
-                semantic = doc.metadata.get("_semantic_score", 0.0)
-                keyword = doc.metadata.get("_keyword_score", 0.0)
-                distance = doc.metadata.get("_vector_distance", 0.0)
+                rerank_score = doc.metadata.get("_rerank_score")
+                rerank_rank = doc.metadata.get("_rerank_rank")
+                distance = doc.metadata.get("_vector_distance")
+                fallback = doc.metadata.get("_rerank_fallback", False)
+                rerank_score_text = (
+                    f"{float(rerank_score):.4f}"
+                    if isinstance(rerank_score, (int, float))
+                    else "None"
+                )
+                distance_text = (
+                    f"{float(distance):.4f}"
+                    if isinstance(distance, (int, float))
+                    else "None"
+                )
                 print(
                     f"--- DOC {i} | file={source} | page={page} | "
-                    f"final={final_score:.4f} semantic={semantic:.4f} "
-                    f"keyword={keyword:.4f} distance={distance:.4f} ---"
+                    f"rerank_rank={rerank_rank} rerank_score={rerank_score_text} "
+                    f"distance={distance_text} fallback={fallback} ---"
                 )
             else:
                 print(f"--- DOC {i} | file={source} | page={page} ---")

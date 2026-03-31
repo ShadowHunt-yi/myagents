@@ -322,6 +322,8 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "avg_answer_accuracy": _safe_mean(answer_acc_values),
         "top_k": args.top_k,
         "fetch_k": args.fetch_k,
+        "retrieval_ranking": "reranker_with_vector_order_fallback",
+        "reranker_model": os.getenv("RERANKERMODEL", "BAAI/bge-reranker-v2-m3"),
         "skip_answer": args.skip_answer,
         "index_stats": index_stats,
     }
@@ -344,6 +346,8 @@ def _print_summary(report: dict[str, Any]) -> None:
     print(f"Source MRR           : {summary.get('source_mrr')}")
     print(f"Answer accuracy (avg): {summary['avg_answer_accuracy']}")
     print(f"Top K / Fetch K      : {summary['top_k']} / {summary['fetch_k']}")
+    print(f"Ranking strategy     : {summary.get('retrieval_ranking')}")
+    print(f"Reranker model       : {summary.get('reranker_model')}")
     print(f"Index stats          : {summary['index_stats']}")
     print("=" * 68)
 
