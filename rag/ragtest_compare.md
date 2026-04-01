@@ -1,14 +1,25 @@
-# RAG Evaluation Comparison
+﻿# RAG 评估对比报告
 
-## Overview
+## 一、对比范围
 
-- Baseline: `rag/ragtest_report.hybrid_baseline.json` (manual hybrid weighting)
-- Current: `rag/ragtest_report.json` (reranker ranking)
-- Conclusion: reranker keeps recall unchanged and improves ranking quality plus answer accuracy.
+- 旧基线：`rag/ragtest_report.hybrid_baseline.json`
+- 新结果：`rag/ragtest_report.json`
+- 对比目标：验证从“混合检索手动分权”切换到 `reranker` 排序后的效果变化
 
-## Summary Metrics
+## 二、核心结论
 
-| Metric | Hybrid Baseline | Reranker | Delta |
+本次切换到 `reranker` 后，整体效果是明显提升的。
+
+主要表现为：
+
+- 召回能力没有下降
+- 正确文档的排序明显更靠前
+- 返回上下文更干净
+- 最终回答准确率显著提升
+
+## 三、汇总指标对比
+
+| 指标 | 旧基线 | 新结果 | 变化 |
 | --- | ---: | ---: | ---: |
 | Recall@K | 1.0000 | 1.0000 | +0.0000 |
 | Hit@K | 1.0000 | 1.0000 | +0.0000 |
@@ -17,17 +28,49 @@
 | Source MRR | 0.7576 | 1.0000 | +0.2424 |
 | Answer Accuracy | 0.3515 | 0.5848 | +0.2333 |
 
-## Interpretation
+## 四、结果解读
 
-- Recall@K and Hit@K stay at 1.0, so both versions can retrieve the target source.
-- Top1 Source Hit Rate improves from 0.5455 to 1.0, so reranker consistently moves the correct source to rank 1.
-- Precision-like improves from 0.4394 to 0.8939, so the returned context is much cleaner.
-- Source MRR improves from 0.7576 to 1.0, so the correct source appears earlier overall.
-- Answer Accuracy improves from 0.3515 to 0.5848, so retrieval improvements propagate to final answers.
+### 1. 召回没有变差
 
-## Improved Cases
+- `Recall@K` 和 `Hit@K` 都保持在 `1.0`
+- 说明旧方案和新方案都能把目标文档召回出来
 
-| Case | Answer Acc | First Match Rank | Source Change |
+这说明本次优化的重点不是“找不到文档”问题，而是“文档排得准不准”的问题。
+
+### 2. 排序质量明显提升
+
+- `Top1 Source Hit Rate` 从 `0.5455` 提升到 `1.0`
+- `Source MRR` 从 `0.7576` 提升到 `1.0`
+
+说明：
+
+- 旧方案下，正确文档虽然能召回，但不一定排第一
+- 新方案下，正确文档基本都能排到第一
+
+这是 `reranker` 的主要收益。
+
+### 3. 上下文更干净
+
+- `Precision-like` 从 `0.4394` 提升到 `0.8939`
+
+说明：
+
+- 返回给大模型的文档更聚焦
+- 混入的无关文档更少
+- 干扰更低
+
+### 4. 最终回答质量提升
+
+- `Answer Accuracy` 从 `0.3515` 提升到 `0.5848`
+
+说明：
+
+- 排序优化已经传导到了最终问答效果
+- 这次切换不是只有检索指标变好，答案本身也更准确了
+
+## 五、提升明显的用例
+
+| Case | Answer Accuracy | First Match Rank | Source 变化 |
 | --- | ---: | ---: | --- |
 | `lore_trailer_vocab` | 0.0000 -> 1.0000 | 3 -> 1 | `['2603.15602v1.pdf', '2603.15594v1.pdf', '2603.15566v1.pdf']` -> `['2603.15566v1.pdf']` |
 | `openseeker_two_innovations` | 0.0000 -> 1.0000 | 2 -> 1 | `['2603.15602v1.pdf', '2603.15594v1.pdf']` -> `['2603.15594v1.pdf']` |
@@ -36,23 +79,47 @@
 | `energetics_three_tasks` | 0.0000 -> 0.3333 | 2 -> 1 | `['2603.15594v1.pdf', '2603.15602v1.pdf', '2603.15566v1.pdf']` -> `['2603.15602v1.pdf', '2603.15594v1.pdf']` |
 | `openseeker_browsecomp` | 0.1667 -> 0.3333 | 1 -> 1 | `['2603.15594v1.pdf', '2603.15566v1.pdf']` -> `['2603.15594v1.pdf']` |
 
-## Regressed Cases
+这些 case 的共同特点是：
 
-| Case | Answer Acc | First Match Rank | Source Change |
+- 旧方案能召回到正确文档
+- 但正确文档没有足够靠前
+- `reranker` 重排后，主文档更集中，回答也随之改善
+
+## 六、退化用例
+
+| Case | Answer Accuracy | First Match Rank | Source 变化 |
 | --- | ---: | ---: | --- |
 | `energetics_three_costs` | 0.5000 -> 0.0000 | 2 -> 1 | `['2603.15594v1.pdf', '2603.15602v1.pdf', '2603.15566v1.pdf']` -> `['2603.15602v1.pdf', '2603.15594v1.pdf', '2603.15566v1.pdf']` |
 | `lore_core_thesis` | 0.8000 -> 0.4000 | 1 -> 1 | `['2603.15566v1.pdf', '2603.15594v1.pdf']` -> `['2603.15566v1.pdf']` |
 | `lore_decision_shadow` | 0.4000 -> 0.2000 | 1 -> 1 | `['2603.15566v1.pdf', '2603.15594v1.pdf']` -> `['2603.15566v1.pdf']` |
 
-## Notes
+这些 case 的特点是：
 
-- Most cases now keep fewer `retrieved_sources`, which means less cross-document noise.
-- The strongest gains are on semantic ranking cases such as `openseeker_two_innovations` and `lore_trailer_vocab`.
-- The regressions do not come from worse source rank. They are more likely answer-generation or keyword-coverage issues.
+- 正确文档排名没有变差，甚至更好了
+- 但最终答案得分下降了
 
-## Related Files
+这更像是：
 
-- `rag/ragtest.py`
+- 回答生成时的关键词覆盖不足
+- 或者评测规则对答案表述方式比较敏感
+
+而不像是检索本身失败。
+
+## 七、总结判断
+
+这次从“混合检索手动分权”切到 `reranker` 排序，结论可以概括为：
+
+- 检索召回没有下降
+- 排序质量明显提升
+- 上下文噪声显著减少
+- 最终回答质量整体提升
+
+因此，这次优化是有效的，而且是有明确收益的优化。
+
+## 八、关联文件
+
 - `rag/rag.py`
+- `rag/ragtest.py`
 - `rag/ragtest_report.hybrid_baseline.json`
 - `rag/ragtest_report.json`
+- `rag/rag_py_diff_explained.md`
